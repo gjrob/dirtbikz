@@ -14,11 +14,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const { data, error } = await supabase
+  // Attempt insert including client_slug. If the column doesn't exist (old schema),
+  // retry without it so the API still works while we migrate the database.
+  let data: any, error: any
+
+  ({ data, error } = await supabase
     .from('kyoto_reservations')
     .insert({ name, email, phone, party_size, date, time, notes, client_slug: 'kyoto' })
     .select()
-    .single()
+    .single())
+
+  if (error && error.code === 'PGRST204' && /client_slug/.test(error.message)) {
+    console.warn('Column client_slug missing, retrying without it')
+    ({ data, error } = await supabase
+      .from('kyoto_reservations')
+      .insert({ name, email, phone, party_size, date, time, notes })
+      .select()
+      .single())
+  }
 
   if (error) {
     console.error('Reservation error:', error)
