@@ -7,12 +7,18 @@ interface Message {
   content: string;
 }
 
-export default function ChatBot() {
+interface ChatBotProps {
+  lang?: 'en' | 'es';
+}
+
+export default function ChatBot({ lang = 'en' }: ChatBotProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Welcome to Kyoto Asian Grille! 🥢 I\'m Yuki, your virtual host. Ask me about our menu, specials, gluten-free options, or anything else. How can I help?'
+      content: lang === 'es'
+        ? '¡BIENVENIDO A DUSTDEVIL! 🏍️ Soy DEVIL, tu asistente del mercado. ¿Buscas comprar, vender, o necesitas consejos sobre motos?'
+        : 'WELCOME TO DUSTDEVIL! 🏍️ I\'m DEVIL, your marketplace AI. Looking to buy, sell, or need advice on a bike?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -39,7 +45,7 @@ export default function ChatBot() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updated }),
+        body: JSON.stringify({ messages: updated, lang }),
       });
 
       if (!res.ok) throw new Error('Chat failed');
@@ -68,7 +74,12 @@ export default function ChatBot() {
       setLoading(false);
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, I\'m having trouble connecting. Please call us at (910) 332-3302 and we\'ll be happy to help!' }
+        {
+          role: 'assistant',
+          content: lang === 'es'
+            ? '¡Lo siento! Algo salió mal. Intenta de nuevo.'
+            : 'Sorry, something went wrong. Try again!'
+        }
       ]);
     }
   };
@@ -80,11 +91,9 @@ export default function ChatBot() {
     }
   };
 
-  // Detect language for bilingual greeting
-  const detectLang = (text: string) => {
-    const esWords = ['hola', 'menú', 'comida', 'quiero', 'precio', 'reservar', 'gracias', 'por favor'];
-    return esWords.some(w => text.toLowerCase().includes(w)) ? 'es' : 'en';
-  };
+  const placeholder = lang === 'es'
+    ? 'Pregunta sobre motos, precios, consejos...'
+    : 'Ask about bikes, prices, what to look for...';
 
   return (
     <>
@@ -93,15 +102,15 @@ export default function ChatBot() {
         onClick={() => setOpen(!open)}
         aria-label={open ? 'Close chat' : 'Open chat'}
       >
-        {open ? '✕' : '🥢'}
+        {open ? '✕' : '🏍️'}
       </button>
 
       {open && (
         <div className="chatbot-panel">
           <div className="chatbot-header">
-            <div className="chatbot-avatar">🍣</div>
+            <div className="chatbot-avatar">💀</div>
             <div className="chatbot-header-text">
-              <h4>Yuki — Kyoto Virtual Host</h4>
+              <h4>DEVIL — DUSTDEVIL AI</h4>
               <span><span className="chatbot-online"></span>Online now</span>
             </div>
           </div>
@@ -125,7 +134,7 @@ export default function ChatBot() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder="Ask about our menu, hours, GF options..."
+              placeholder={placeholder}
               autoFocus
             />
             <button onClick={send} disabled={loading} aria-label="Send">
