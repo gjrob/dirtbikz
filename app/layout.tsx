@@ -1,39 +1,36 @@
-import type { Metadata } from 'next'
-import './globals.css'
 import PoweredByBTV from './components/PoweredByBTV'
-import ChatBot from './components/ChatBot'
+import type { Metadata } from 'next';
+import './globals.css';
+import ChatBot from './components/ChatBot';
 
 export const metadata: Metadata = {
-  title: 'DUSTDEVIL | Buy & Sell Dirt Bikes | Wilmington NC',
-  description: 'Buy, sell, and trade dirt bikes with no middleman. The fastest dirt bike marketplace in Wilmington, NC. Post your bike free.',
-  keywords: 'dirt bikes for sale Wilmington NC, buy dirt bike NC, sell dirt bike, motocross bikes, DUSTDEVIL marketplace',
+  title: 'Kyoto Asian Grille — Wilmington, NC | Sushi, Hibachi, Thai & Chinese',
+  description: 'Wilmington\'s best Asian fusion restaurant. Fresh sushi, sizzling hibachi, authentic Thai curries & Chinese dishes. Gluten-free friendly. 4102 Market Street.',
+  keywords: 'Kyoto Asian Grille, Wilmington NC, sushi, hibachi, Thai food, pad thai, curry, gluten free, Asian fusion, Market Street',
   openGraph: {
+    title: 'Kyoto Asian Grille — Wilmington, NC',
+    description: 'Fresh sushi, sizzling hibachi, authentic Thai curries. Nothing in the freezer but the ice cream.',
     type: 'website',
-    title: 'DUSTDEVIL | Dirt Bike Marketplace',
-    description: 'Buy. Sell. Dominate. Where riders trade iron.',
-    url: 'https://dustdevil.com',
-    images: [{ url: '/og-image.jpg', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'DUSTDEVIL | Buy & Sell Dirt Bikes',
-    description: 'Buy. Sell. Dominate. Where riders trade iron.',
-    images: ['/og-image.jpg'],
+    title: 'Kyoto Asian Grille — Wilmington, NC',
+    description: 'Fresh sushi, sizzling hibachi, authentic Thai curries.',
   },
   other: {
     'geo.region': 'US-NC',
     'geo.placename': 'Wilmington, North Carolina',
   },
-}
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
         {children}
-        <PoweredByBTV />
         <ChatBot />
+        <PoweredByBTV />
       </body>
     </html>
-  )
+  );
 }

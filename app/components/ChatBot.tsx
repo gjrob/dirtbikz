@@ -7,18 +7,12 @@ interface Message {
   content: string;
 }
 
-interface ChatBotProps {
-  lang?: 'en' | 'es';
-}
-
-export default function ChatBot({ lang = 'en' }: ChatBotProps) {
+export default function ChatBot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: lang === 'es'
-        ? '¡BIENVENIDO A DUSTDEVIL! 🏍️ Soy DEVIL, tu asistente del mercado. ¿Buscas comprar, vender, o necesitas consejos sobre motos?'
-        : 'WELCOME TO DUSTDEVIL! 🏍️ I\'m DEVIL, your marketplace AI. Looking to buy, sell, or need advice on a bike?'
+      content: 'Welcome to Kyoto Asian Grille! 🥢 I\'m Yuki, your virtual host. Ask me about our menu, specials, gluten-free options, or anything else. How can I help?'
     }
   ]);
   const [input, setInput] = useState('');
@@ -45,7 +39,7 @@ export default function ChatBot({ lang = 'en' }: ChatBotProps) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updated, lang }),
+        body: JSON.stringify({ messages: updated }),
       });
 
       if (!res.ok) throw new Error('Chat failed');
@@ -74,12 +68,7 @@ export default function ChatBot({ lang = 'en' }: ChatBotProps) {
       setLoading(false);
       setMessages(prev => [
         ...prev,
-        {
-          role: 'assistant',
-          content: lang === 'es'
-            ? '¡Lo siento! Algo salió mal. Intenta de nuevo.'
-            : 'Sorry, something went wrong. Try again!'
-        }
+        { role: 'assistant', content: 'Sorry, I\'m having trouble connecting. Please call us at (910) 332-3302 and we\'ll be happy to help!' }
       ]);
     }
   };
@@ -91,9 +80,11 @@ export default function ChatBot({ lang = 'en' }: ChatBotProps) {
     }
   };
 
-  const placeholder = lang === 'es'
-    ? 'Pregunta sobre motos, precios, consejos...'
-    : 'Ask about bikes, prices, what to look for...';
+  // Detect language for bilingual greeting
+  const detectLang = (text: string) => {
+    const esWords = ['hola', 'menú', 'comida', 'quiero', 'precio', 'reservar', 'gracias', 'por favor'];
+    return esWords.some(w => text.toLowerCase().includes(w)) ? 'es' : 'en';
+  };
 
   return (
     <>
@@ -102,15 +93,15 @@ export default function ChatBot({ lang = 'en' }: ChatBotProps) {
         onClick={() => setOpen(!open)}
         aria-label={open ? 'Close chat' : 'Open chat'}
       >
-        {open ? '✕' : '🏍️'}
+        {open ? '✕' : '🥢'}
       </button>
 
       {open && (
         <div className="chatbot-panel">
           <div className="chatbot-header">
-            <div className="chatbot-avatar">💀</div>
+            <div className="chatbot-avatar">🍣</div>
             <div className="chatbot-header-text">
-              <h4>DEVIL — DUSTDEVIL AI</h4>
+              <h4>Yuki — Kyoto Virtual Host</h4>
               <span><span className="chatbot-online"></span>Online now</span>
             </div>
           </div>
@@ -134,7 +125,7 @@ export default function ChatBot({ lang = 'en' }: ChatBotProps) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={placeholder}
+              placeholder="Ask about our menu, hours, GF options..."
               autoFocus
             />
             <button onClick={send} disabled={loading} aria-label="Send">
