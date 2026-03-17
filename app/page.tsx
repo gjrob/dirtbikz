@@ -1,439 +1,584 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import ReservationModal from './components/ReservationModal';
-import { OrderButton } from './components/OrderButton';
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@supabase/supabase-js'
+import ChatBot from './components/ChatBot'
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+)
 
-/* ─── MENU DATA ─── */
-const MENU_CATEGORIES = [
-  'All', 'Appetizers', 'Soups & Salads', 'Thai & Chinese Stir-Fry', 'Thai Curry',
-  'Chef Specialties', 'Japanese Hibachi', 'Sushi Rolls', 'Specialty Sushi Rolls',
-  'Bento Box', 'Desserts'
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const MENU_ITEMS = [
-  // Appetizers
-  { cat: 'Appetizers', name: 'Pan Fried Dumplings', desc: 'Pan-fried to a crispy golden exterior', price: '$11.23', badge: '#1 Most Liked' },
-  { cat: 'Appetizers', name: 'Appetizer Sampler', desc: 'Shrimp wraps (2), crab wonton (2), steamed dumpling (4), spring rolls (2)', price: '$17.24' },
-  { cat: 'Appetizers', name: 'Gai Satay', desc: 'Thai chicken skewers in yellow curry with cucumber salad & peanut sauce', price: '$11.23' },
-  { cat: 'Appetizers', name: 'Banpei Shrimp', desc: 'Lightly battered shrimp with spicy mayo & sweet chili, topped with scallions', price: '$12.48' },
-  { cat: 'Appetizers', name: 'Crab Wonton', desc: 'Crab, red onions & cream cheese filled wontons', price: '$8.73', badge: '86% liked' },
-  { cat: 'Appetizers', name: 'Shrimp Tempura', desc: '7 crispy pieces', price: '$12.49' },
-  { cat: 'Appetizers', name: 'Steamed Dumplings', desc: 'Pork dumplings with ginger sauce', price: '$11.23', badge: '100% liked' },
-  { cat: 'Appetizers', name: 'Edamame', desc: 'Boiled soybeans in their pods', price: '$11.23' },
-
-  // Soups & Salads
-  { cat: 'Soups & Salads', name: 'Miso Soup', desc: 'Traditional Japanese miso paste soup', price: '$5.11', badge: '100% liked' },
-  { cat: 'Soups & Salads', name: 'Thom Kha Soup', desc: 'Thai coconut soup with Thai peppers, tomatoes, mushrooms & onions', price: '$8.49' },
-  { cat: 'Soups & Salads', name: 'Hot & Sour Soup', desc: 'Savory balance of spicy and tangy flavors', price: '$5.73', badge: 'Popular' },
-  { cat: 'Soups & Salads', name: 'Larb Gai Salad', desc: 'Spicy Thai chicken salad with basil, rice powder, chili & lime juice', price: '$7.99' },
-  { cat: 'Soups & Salads', name: 'Seafood Noodle Soup', desc: 'Egg noodle soup with crabsticks, shrimp, scallops & veggies', price: '$12.99' },
-
-  // Thai & Chinese Stir-Fry
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Pad Thai', desc: 'Rice noodles in sweet tamarind sauce with red onions, tofu & peanuts', price: '$12.99', badge: 'Signature' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Pad Kee Mao', desc: 'Drunken noodles with basil, Thai chili, broccoli, carrots & red pepper', price: '$12.99', badge: 'Fan Favorite' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Pad See Ewe', desc: 'Wide rice noodles in sweet dark soy with broccoli, eggs & carrots', price: '$12.99' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'General Tso\'s', desc: 'Sweet & spicy sauce with broccoli, onions & carrots', price: '$11.99' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Thai Basil Fried Rice', desc: 'With fresh Thai peppers, basil, onions, eggs & fish sauce', price: '$12.99' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Lo Mein', desc: 'Egg noodles with broccoli, carrots, bean sprouts & egg', price: '$12.99' },
-  { cat: 'Thai & Chinese Stir-Fry', name: 'Pineapple Fried Rice', desc: 'Curry powder, red peppers, onions, pineapple, eggs & peanuts', price: '$12.99' },
-
-  // Thai Curry
-  { cat: 'Thai Curry', name: 'Red Curry', desc: 'Red Thai chili peppers with coconut milk, bamboo & zucchini. Topped with basil', price: '$12.99', badge: 'Best in Wilmington' },
-  { cat: 'Thai Curry', name: 'Green Curry', desc: 'Green chili peppers with coconut milk, bamboo & zucchini. Fresh basil', price: '$12.99' },
-  { cat: 'Thai Curry', name: 'Masaman Curry', desc: 'Sweet Thai peanut curry with potato, carrots & coconut milk', price: '$12.99', badge: 'Fan Favorite' },
-  { cat: 'Thai Curry', name: 'Penang Curry', desc: 'Yellow & red chili peppers with coconut milk, zucchini & carrots', price: '$12.99' },
-
-  // Chef Specialties
-  { cat: 'Chef Specialties', name: 'Gang Talay', desc: 'Seafood curry with shrimp, scallops, mussels, soft shell crab & calamari', price: '$22.99', badge: 'Premium' },
-  { cat: 'Chef Specialties', name: 'Pla Sam Rod', desc: '3 Flavored Fish — crispy tilapia in sweet, spicy & sour tomato sauce', price: '$13.99' },
-  { cat: 'Chef Specialties', name: 'Sweet Thai Chili Chicken', desc: 'Lightly fried chicken with sweet Thai chili sauce, basil & cilantro', price: '$11.99' },
-  { cat: 'Chef Specialties', name: 'Crab Fried Rice', desc: 'Stir fried rice with crab meat, egg, onions & scallions', price: '$14.99' },
-  { cat: 'Chef Specialties', name: 'Kiss of the Dragon', desc: 'Batter fried chicken in spicy sweet & sour sauce with vegetables', price: '$12.99' },
-  { cat: 'Chef Specialties', name: 'Orange Chicken', desc: 'Lightly fried with mixed vegetables & sweet orange flavored sauce', price: '$12.99' },
-
-  // Japanese Hibachi
-  { cat: 'Japanese Hibachi', name: 'Hibachi Chicken', desc: 'Grilled chicken with fried rice & stir-fried vegetables', price: '$11.99', badge: 'GF Available' },
-  { cat: 'Japanese Hibachi', name: 'Hibachi Steak', desc: 'Grilled steak with fried rice & stir-fried vegetables', price: '$11.95', badge: 'GF Available' },
-  { cat: 'Japanese Hibachi', name: 'Hibachi Steak & Shrimp', desc: 'Combo with fried rice & stir-fried vegetables', price: '$13.95' },
-  { cat: 'Japanese Hibachi', name: 'Hibachi Salmon', desc: 'Grilled salmon with fried rice & stir-fried vegetables', price: '$14.95' },
-  { cat: 'Japanese Hibachi', name: 'Hibachi Steak & Chicken', desc: 'Combo with fried rice & stir-fried vegetables', price: '$11.95' },
-
-  // Sushi Rolls
-  { cat: 'Sushi Rolls', name: 'California Roll', desc: '', price: '$4.95' },
-  { cat: 'Sushi Rolls', name: 'Spicy Tuna Roll', desc: '', price: '$5.25' },
-  { cat: 'Sushi Rolls', name: 'Rainbow Roll', desc: 'Crab & cucumber topped with salmon, tuna & avocado', price: '$9.95' },
-  { cat: 'Sushi Rolls', name: 'Spider Roll', desc: 'Soft-shell crab, cucumber, avocado, masago & eel sauce', price: '$8.95' },
-  { cat: 'Sushi Rolls', name: 'Shrimp Tempura Roll', desc: '', price: '$5.95' },
-  { cat: 'Sushi Rolls', name: 'Carolina Roll', desc: 'Salmon, tuna & cucumber', price: '$8.95' },
-
-  // Specialty Sushi Rolls
-  { cat: 'Specialty Sushi Rolls', name: 'Why Not Roll', desc: 'Shrimp tempura, cream cheese, cucumber topped with salmon, tuna, avocado & white sauce', price: '$15.00', badge: 'Premium' },
-  { cat: 'Specialty Sushi Rolls', name: 'Vegas Roll', desc: 'Deep fried salmon & cream cheese with spicy mayo & eel sauce', price: '$8.00', badge: 'Fan Favorite' },
-  { cat: 'Specialty Sushi Rolls', name: 'Wilmington Roll', desc: 'Shrimp tempura & cream cheese topped with avocado & spicy mayo', price: '$10.00', badge: 'Local Favorite' },
-  { cat: 'Specialty Sushi Rolls', name: 'Dragon Roll', desc: 'Eel & cucumber topped with avocado, eel sauce & masago', price: '$10.00' },
-  { cat: 'Specialty Sushi Rolls', name: 'UNCW Roll', desc: 'Shrimp tempura & cream cheese with eel sauce, tempura flakes, spicy crab & masago', price: '$10.00', badge: 'Local Favorite' },
-  { cat: 'Specialty Sushi Rolls', name: 'Seahawk Roll', desc: 'Shrimp & avocado with spicy tuna, tempura flakes & masago', price: '$11.00' },
-  { cat: 'Specialty Sushi Rolls', name: 'Sapporo Roll', desc: 'Tuna & cucumber topped with spicy tuna, tempura flakes & avocado', price: '$11.00' },
-  { cat: 'Specialty Sushi Rolls', name: 'Paradise Roll', desc: 'Shrimp tempura & cream cheese topped with mango & spicy tuna', price: '$12.00' },
-
-  // Bento Box
-  { cat: 'Bento Box', name: 'Tempura Bento Box', desc: 'Shrimp & vegetables tempura', price: '$12.99' },
-  { cat: 'Bento Box', name: 'Broccoli Bento', desc: 'Beef or chicken with broccoli', price: '$12.99' },
-  { cat: 'Bento Box', name: 'Sesame Chicken Bento', desc: '', price: '$12.99' },
-  { cat: 'Bento Box', name: 'Hibachi Chicken Bento', desc: '', price: '$11.99' },
-
-  // Desserts
-  { cat: 'Desserts', name: 'Tempura Ice Cream', desc: 'Vanilla ice cream wrapped in pound cake, fried with tempura flour & chocolate', price: '$5.99' },
-  { cat: 'Desserts', name: 'The Sweet Tooth', desc: 'Fried ice cream, fried bananas & golden toast', price: '$10.99' },
-  { cat: 'Desserts', name: 'Golden Toast', desc: 'Crispy wrap with sweet cream cheese & ice cream', price: '$4.99' },
-  { cat: 'Desserts', name: 'Fried Banana', desc: 'Tempura fried banana with chocolate syrup or honey', price: '$2.99' },
-];
-
-const REVIEWS = [
-  { text: 'Best Asian all-around restaurant in town, and has remained consistent.', author: 'TripAdvisor Reviewer', stars: 5, source: 'TripAdvisor' },
-  { text: 'Really great Asian and I love the menu variety!', author: 'Anna B.', stars: 5, source: 'Uber Eats' },
-  { text: 'Best Hibachi I\'ve ever had. Everything was cooked perfectly.', author: 'TripAdvisor Reviewer', stars: 5, source: 'TripAdvisor' },
-  { text: 'The owner is on site most of the time and when it\'s yours you care the most.', author: 'Google Reviewer', stars: 5, source: 'Google' },
-  { text: 'Incredible Gluten-Free options for super sensitive diners. Staff is so knowledgeable!', author: 'Celiac Diner', stars: 5, source: 'FindMeGlutenFree' },
-  { text: 'Kyoto\'s curries will beat Indochine\'s. Staff has always been so friendly.', author: 'Regular Customer', stars: 5, source: 'TripAdvisor' },
-];
-
-const PETAL_CONFIG = [
-  { left: '5%',  duration: '9s',  delay: '0s' },
-  { left: '12%', duration: '12s', delay: '2s' },
-  { left: '23%', duration: '8s',  delay: '4s' },
-  { left: '35%', duration: '14s', delay: '1s' },
-  { left: '47%', duration: '11s', delay: '6s' },
-  { left: '58%', duration: '10s', delay: '3s' },
-  { left: '67%', duration: '13s', delay: '7s' },
-  { left: '76%', duration: '9s',  delay: '5s' },
-  { left: '85%', duration: '15s', delay: '2s' },
-  { left: '93%', duration: '11s', delay: '8s' },
-];
-
-function getCategoryImage(cat: string, name: string): string | null {
-  const lower = name.toLowerCase();
-  if (cat === 'Desserts') return '/ref/dessert.png';
-  if (cat === 'Soups & Salads') return '/ref/soup.png';
-  if (cat === 'Sushi Rolls' || cat === 'Specialty Sushi Rolls') return '/ref/suschi.png';
-  if (lower.includes('fried rice')) return '/ref/friedrice.png';
-  if (lower.includes('chicken') || lower.includes('gai')) return '/ref/chicken.png';
-  return null;
+interface Product {
+  id: string
+  name: string
+  category: string
+  brand?: string
+  model?: string
+  year?: number
+  description?: string
+  primary_image_url?: string
+  price_cents: number
+  original_price_cents?: number
+  location?: string
+  in_stock: boolean
+  featured: boolean
 }
 
-export default function Home() {
-  const [lang, setLang] = useState<'en' | 'es'>('en');
-  const [scrolled, setScrolled] = useState(false);
-  const [activeCat, setActiveCat] = useState('All');
-  const [showReservation, setShowReservation] = useState(false);
-  const [specials, setSpecials] = useState('');
+interface CartItem {
+  product: Product
+  quantity: number
+}
+
+// ── Sample data (shown when DB is empty / not configured) ─────────────────────
+
+const SAMPLE_PRODUCTS: Product[] = [
+  {
+    id: 's1',
+    name: '2023 Honda CRF250R',
+    category: 'dirt-bike',
+    brand: 'Honda',
+    model: 'CRF250R',
+    year: 2023,
+    description: 'Competition-ready motocross bike. Excellent condition, low hours.',
+    primary_image_url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80',
+    price_cents: 699900,
+    location: 'NC',
+    in_stock: true,
+    featured: true,
+  },
+  {
+    id: 's2',
+    name: '2022 Yamaha YFZ450R',
+    category: 'atv',
+    brand: 'Yamaha',
+    model: 'YFZ450R',
+    year: 2022,
+    description: 'Sport ATV, race-ready. New tires, fresh service.',
+    primary_image_url: 'https://images.unsplash.com/photo-1609630875171-b1321377ee65?w=600&q=80',
+    price_cents: 899900,
+    location: 'SC',
+    in_stock: true,
+    featured: true,
+  },
+  {
+    id: 's3',
+    name: '2021 Polaris RZR XP 1000',
+    category: 'side-by-side',
+    brand: 'Polaris',
+    model: 'RZR XP 1000',
+    year: 2021,
+    description: 'Trail-ready side-by-side with full cage, winch, and LED bar.',
+    primary_image_url: 'https://images.unsplash.com/photo-1551698618-1dfe5d97d256?w=600&q=80',
+    price_cents: 1549900,
+    original_price_cents: 1699900,
+    location: 'GA',
+    in_stock: true,
+    featured: false,
+  },
+  {
+    id: 's4',
+    name: '2023 TrailMaster 300X Go-Cart',
+    category: 'go-cart',
+    brand: 'TrailMaster',
+    model: '300X',
+    year: 2023,
+    description: 'Adult-sized go-cart, perfect for trails and tracks.',
+    primary_image_url: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=600&q=80',
+    price_cents: 249900,
+    location: 'NC',
+    in_stock: true,
+    featured: false,
+  },
+  {
+    id: 's5',
+    name: 'ProX Top End Rebuild Kit — KTM 250',
+    category: 'parts',
+    brand: 'ProX',
+    model: 'KTM 250 Top End Kit',
+    description: 'Complete piston, rings, gaskets. Fits KTM 250 EXC 2018-2023.',
+    primary_image_url: 'https://images.unsplash.com/photo-1530979788-b6892a39a7fe?w=600&q=80',
+    price_cents: 18900,
+    location: 'NC',
+    in_stock: true,
+    featured: false,
+  },
+  {
+    id: 's6',
+    name: '2022 CFMOTO UFORCE 1000',
+    category: '4-wheeler',
+    brand: 'CFMOTO',
+    model: 'UFORCE 1000',
+    year: 2022,
+    description: 'Utility ATV with dump bed, 2" receiver hitch, highway ready.',
+    primary_image_url: 'https://images.unsplash.com/photo-1558981285-501cd9af9426?w=600&q=80',
+    price_cents: 1099900,
+    location: 'SC',
+    in_stock: true,
+    featured: false,
+  },
+]
+
+// ── Categories ────────────────────────────────────────────────────────────────
+
+const CATEGORIES = [
+  { slug: 'all',          label: { en: 'All',           es: 'Todo' },         icon: '🏍️' },
+  { slug: 'dirt-bike',    label: { en: 'Dirt Bikes',    es: 'Motos de Tierra'}, icon: '🏁' },
+  { slug: 'atv',          label: { en: 'ATVs',          es: 'ATVs' },          icon: '🛞' },
+  { slug: 'side-by-side', label: { en: 'Side-by-Sides', es: 'Side-by-Sides' }, icon: '🚗' },
+  { slug: 'go-cart',      label: { en: 'Go-Carts',      es: 'Go-Karts' },      icon: '🏎️' },
+  { slug: '4-wheeler',    label: { en: '4-Wheelers',    es: '4 Ruedas' },      icon: '🛻' },
+  { slug: 'fold-cart',    label: { en: 'Fold Carts',    es: 'Carros Plegables'},icon: '🛒' },
+  { slug: 'parts',        label: { en: 'Parts',         es: 'Partes' },        icon: '🔧' },
+]
+
+const LOCATIONS = ['All', 'NC', 'SC', 'GA']
+
+// ── Translations ──────────────────────────────────────────────────────────────
+
+const t = {
+  tagline:      { en: 'Buy. Sell. Parts.',       es: 'Compra. Vende. Partes.' },
+  shopNow:      { en: 'SHOP NOW',                es: 'COMPRAR' },
+  filterBy:     { en: 'Filter by location',      es: 'Filtrar por ubicación' },
+  addToCart:    { en: 'ADD TO CART',             es: 'AÑADIR' },
+  outOfStock:   { en: 'OUT OF STOCK',            es: 'AGOTADO' },
+  cart:         { en: 'Cart',                    es: 'Carrito' },
+  cartEmpty:    { en: 'Your cart is empty',      es: 'Tu carrito está vacío' },
+  checkout:     { en: 'CHECKOUT',                es: 'PAGAR' },
+  total:        { en: 'Total',                   es: 'Total' },
+  featured:     { en: 'FEATURED',                es: 'DESTACADO' },
+  sale:         { en: 'SALE',                    es: 'OFERTA' },
+  contactUs:    { en: 'Contact Us',              es: 'Contáctenos' },
+  phone:        { en: 'Call or text',            es: 'Llama o escribe' },
+  locations:    { en: 'Locations',               es: 'Ubicaciones' },
+  checkoutTitle:{ en: 'Checkout',                es: 'Pagar' },
+  yourInfo:     { en: 'Your Information',        es: 'Tu Información' },
+  firstName:    { en: 'First Name',              es: 'Nombre' },
+  lastName:     { en: 'Last Name',               es: 'Apellido' },
+  email:        { en: 'Email',                   es: 'Correo' },
+  phone2:       { en: 'Phone',                   es: 'Teléfono' },
+  placeOrder:   { en: 'PLACE ORDER',             es: 'REALIZAR PEDIDO' },
+  processing:   { en: 'Processing...',           es: 'Procesando...' },
+  close:        { en: 'Close',                   es: 'Cerrar' },
+  remove:       { en: 'Remove',                  es: 'Quitar' },
+  noProducts:   { en: 'No products found in this category.',
+                  es: 'No se encontraron productos en esta categoría.' },
+  heroSub:      { en: 'NC · SC · GA — In-person & Online',
+                  es: 'NC · SC · GA — En persona y en línea' },
+  statsVehicles:{ en: 'Vehicles',    es: 'Vehículos' },
+  statsLocations:{ en: 'Locations', es: 'Ubicaciones' },
+  statsYears:   { en: 'Years Selling', es: 'Años Vendiendo' },
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmt(cents: number) {
+  return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0 })
+}
+
+export default function DirtBikzHome() {
+  const [lang, setLang] = useState<'en' | 'es'>('en')
+  const [products, setProducts] = useState<Product[]>(SAMPLE_PRODUCTS)
+  const [activeCat, setActiveCat] = useState('all')
+  const [activeLoc, setActiveLoc] = useState('All')
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [cartOpen, setCartOpen] = useState(false)
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+  const shopRef = useRef<HTMLDivElement>(null)
+
+  // Form state
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', onScroll);
+    const onScroll = () => setScrolled(window.scrollY > 60)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
-    supabase.from('venue_status').select('specials_text').eq('client_slug', 'kyoto').single()
-      .then(({ data }) => { if (data?.specials_text) setSpecials(data.specials_text) });
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('products')
+        .select('*')
+        .eq('client_slug', 'dirtbikz')
+        .eq('in_stock', true)
+        .order('featured', { ascending: false })
+        .order('created_at', { ascending: false })
+      if (data && data.length > 0) setProducts(data)
+    }
+    load()
+  }, [])
 
-    const channel = supabase.channel('kyoto-venue')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'venue_status', filter: 'client_slug=eq.kyoto' },
-        ({ new: next }) => setSpecials((next as { specials_text: string }).specials_text || ''))
-      .subscribe();
+  // Filtered products
+  const filtered = products.filter(p => {
+    const catMatch = activeCat === 'all' || p.category === activeCat
+    const locMatch = activeLoc === 'All' || p.location === activeLoc
+    return catMatch && locMatch
+  })
 
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  // Cart helpers
+  function addToCart(product: Product) {
+    setCart(prev => {
+      const existing = prev.find(i => i.product.id === product.id)
+      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+      return [...prev, { product, quantity: 1 }]
+    })
+    setCartOpen(true)
+  }
 
-  const filtered = activeCat === 'All' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.cat === activeCat);
+  function removeFromCart(id: string) {
+    setCart(prev => prev.filter(i => i.product.id !== id))
+  }
+
+  const cartTotal = cart.reduce((sum, i) => sum + i.product.price_cents * i.quantity, 0)
+  const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0)
+
+  async function handleCheckout(e: React.FormEvent) {
+    e.preventDefault()
+    setCheckoutLoading(true)
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cart.map(i => ({ product_id: i.product.id, name: i.product.name, price_cents: i.product.price_cents, quantity: i.quantity })),
+          customer: { name: `${form.firstName} ${form.lastName}`, email: form.email, phone: form.phone },
+        }),
+      })
+      const { url } = await res.json()
+      if (url) window.location.href = url
+    } catch (err) {
+      alert('Something went wrong. Please call (910) 555-0100.')
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
 
   return (
     <>
-      {/* NAV */}
-      <nav className={`nav ${scrolled ? 'scrolled' : ''}`}>
-        <a href="#" className="nav-brand">Kyoto <span>京都</span></a>
-        <ul className="nav-links">
-          <li><a href="#about">About</a></li>
-          <li><a href="#menu">Menu</a></li>
-          <li><a href="#reviews">Reviews</a></li>
-          <li><a href="#info">Hours & Location</a></li>
-          <li>
-            <button onClick={() => setShowReservation(true)} style={{ background: 'none', border: 'none', color: '#b8929a', cursor: 'pointer', fontSize: 'inherit', letterSpacing: '0.05em', fontFamily: 'inherit', fontWeight: 400, padding: 0, transition: 'color 0.3s' }} onMouseEnter={e => (e.currentTarget.style.color = '#e8a0b0')} onMouseLeave={e => (e.currentTarget.style.color = '#b8929a')}>
-              Reservations
-            </button>
-          </li>
-          <li><OrderButton /></li>
-          <li>
-            <button onClick={() => setLang(l => l === 'en' ? 'es' : 'en')} style={{ background: 'none', border: '1px solid rgba(232,160,176,0.3)', color: '#b8929a', cursor: 'pointer', fontSize: '11px', letterSpacing: '0.1em', fontFamily: 'inherit', padding: '4px 10px', borderRadius: '3px' }}>
+      {/* ── NAV ── */}
+      <nav className={`nav${scrolled ? ' nav--scrolled' : ''}`}>
+        <div className="nav__inner">
+          <a href="#shop" className="nav__logo">DIRTBIKZ</a>
+          <div className="nav__links">
+            <a href="#shop"      onClick={() => setActiveCat('all')}>
+              {lang === 'en' ? 'Shop' : 'Tienda'}
+            </a>
+            <a href="#categories">
+              {lang === 'en' ? 'Categories' : 'Categorías'}
+            </a>
+            <a href="#contact">
+              {lang === 'en' ? 'Contact' : 'Contacto'}
+            </a>
+            <button className="nav__lang" onClick={() => setLang(l => l === 'en' ? 'es' : 'en')}>
               {lang === 'en' ? 'ES' : 'EN'}
             </button>
-          </li>
-        </ul>
-      </nav>
-
-      {/* SPECIALS BANNER */}
-      {specials && (
-        <div style={{ background: '#c9a84c', color: '#0d0a0e', textAlign: 'center', padding: '10px 24px', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>
-          ✨ {specials}
-        </div>
-      )}
-
-      {/* HERO */}
-      <section className="hero">
-        {PETAL_CONFIG.map((p, i) => (
-          <div
-            key={i}
-            className="petal"
-            style={{ left: p.left, animationDuration: p.duration, animationDelay: p.delay }}
-          />
-        ))}
-        <div className="hero-content">
-          <div className="hero-kanji">京都</div>
-          <h1>Kyoto <span>Asian Grille</span></h1>
-          <p className="hero-tagline">Nothing in the freezer but the ice cream — since 2012</p>
-          <div className="hero-details">
-            <div className="hero-detail">
-              <span className="hero-detail-label">Location</span>
-              <span className="hero-detail-value">4102 Market Street</span>
-            </div>
-            <div className="hero-detail">
-              <span className="hero-detail-label">Phone</span>
-              <span className="hero-detail-value">(910) 332-3302</span>
-            </div>
-            <div className="hero-detail">
-              <span className="hero-detail-label">Hours</span>
-              <span className="hero-detail-value">Mon–Sat 11am–9:30pm</span>
-            </div>
-          </div>
-          <div className="hero-ctas">
-            <OrderButton />
-            <a href="#menu" className="btn-secondary">
-              View Full Menu
-            </a>
-            <a href="tel:+19103323302" className="btn-secondary">
-              📞 Call Now
-            </a>
-            <button
-              onClick={() => setShowReservation(true)}
-              style={{
-                padding: '0.85rem 2rem',
-                background: 'transparent',
-                border: '1px solid #e8a0b0',
-                borderRadius: '2px',
-                color: '#e8a0b0',
-                fontSize: '0.9rem',
-                fontFamily: 'inherit',
-                fontWeight: 500,
-                cursor: 'pointer',
-                letterSpacing: '0.05em',
-                transition: 'all 0.3s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(232,160,176,0.1)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              🌸 Reserve a Table
+            <button className="nav__cart-btn" onClick={() => setCartOpen(true)}>
+              🛒
+              {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
             </button>
           </div>
         </div>
-      </section>
+      </nav>
 
-      {/* ABOUT */}
-      <section className="about-section" id="about">
-        <div className="about-grid">
-          <div className="about-text">
-            <span className="section-label">Our Story</span>
-            <h2 className="section-title">Where East Meets South</h2>
-            <p>
-              Kyoto Asian Grille brings the vibrant flavors of Japan, Thailand, and China to
-              Wilmington's Market Street corridor. Every dish is crafted from scratch with the freshest
-              ingredients — our chef uses no freezers, no shortcuts, and no compromises.
-            </p>
-            <p>
-              From sizzling hibachi grilled tableside to handcrafted sushi rolls, authentic Thai curries
-              to classic Chinese stir-fry, our extensive menu of 135+ dishes offers something for every
-              palate. We're proudly owner-operated, and our commitment shows in every plate.
-            </p>
-            <p style={{ marginTop: '0.5rem' }}>
-              <span className="gf-badge" style={{ display: 'inline-flex', padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
-                🌿 Gluten-Free Friendly
-              </span>
-              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
-                Dedicated GF prep area. Top-rated on FindMeGlutenFree.
-              </span>
-            </p>
-          </div>
-          <div className="about-stats">
-            <div className="stat-card">
-              <div className="stat-number">4.6</div>
-              <div className="stat-label">Google Rating</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">281+</div>
-              <div className="stat-label">Google Reviews</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">135+</div>
-              <div className="stat-label">Menu Items</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">#86</div>
-              <div className="stat-label">of 582 on TripAdvisor</div>
-            </div>
-          </div>
+      {/* ── HERO ── */}
+      <section className="hero">
+        <div className="hero__overlay" />
+        <div className="hero__content">
+          <p className="hero__eyebrow">DIRTBIKZ</p>
+          <h1 className="hero__title">
+            {lang === 'en' ? 'Dirt Bikes, ATVs\n& More' : 'Motos de Tierra,\nATVs y Más'}
+          </h1>
+          <p className="hero__tagline">{t.tagline[lang]}</p>
+          <p className="hero__sub">{t.heroSub[lang]}</p>
+          <button
+            className="btn btn--primary hero__cta"
+            onClick={() => shopRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          >
+            {t.shopNow[lang]}
+          </button>
         </div>
       </section>
 
-      {/* MENU */}
-      <section className="menu-section" id="menu">
-        <div className="menu-container">
-          <div style={{ textAlign: 'center' }}>
-            <span className="section-label">Our Menu</span>
-            <h2 className="section-title" style={{ marginBottom: '0.5rem' }}>Taste the Tradition</h2>
-            <p className="section-subtitle" style={{ margin: '0 auto 2rem' }}>
-              Sushi · Hibachi · Thai · Chinese · 135+ dishes crafted fresh daily
-            </p>
-          </div>
+      {/* ── STATS BAR ── */}
+      <div className="stats-bar">
+        <div className="stat"><span className="stat__num">500+</span><span className="stat__label">{t.statsVehicles[lang]}</span></div>
+        <div className="stat"><span className="stat__num">3</span><span className="stat__label">{t.statsLocations[lang]}</span></div>
+        <div className="stat"><span className="stat__num">10+</span><span className="stat__label">{t.statsYears[lang]}</span></div>
+      </div>
 
-          <div className="menu-categories">
-            {MENU_CATEGORIES.map(cat => (
+      {/* ── CATEGORY GRID ── */}
+      <section id="categories" className="section">
+        <div className="container">
+          <h2 className="section__title">
+            {lang === 'en' ? 'Shop by Category' : 'Comprar por Categoría'}
+          </h2>
+          <div className="category-grid">
+            {CATEGORIES.filter(c => c.slug !== 'all').map(cat => (
               <button
-                key={cat}
-                className={`menu-cat-btn ${activeCat === cat ? 'active' : ''}`}
-                onClick={() => setActiveCat(cat)}
+                key={cat.slug}
+                className={`category-card${activeCat === cat.slug ? ' category-card--active' : ''}`}
+                onClick={() => {
+                  setActiveCat(cat.slug)
+                  shopRef.current?.scrollIntoView({ behavior: 'smooth' })
+                }}
               >
-                {cat}
+                <span className="category-card__icon">{cat.icon}</span>
+                <span className="category-card__label">{cat.label[lang]}</span>
               </button>
             ))}
           </div>
+        </div>
+      </section>
 
-          <div className="menu-grid">
-            {filtered.map((item, i) => {
-              const itemImg = getCategoryImage(item.cat, item.name);
-              return (
-                <div className="menu-item" key={i}>
-      <script
-              type="application/ld+json"
-              dangerouslySetInnerHTML={{
-                __html: JSON.stringify({
-                  '@context': 'https://schema.org',
-                  '@type': 'Restaurant',
-                  name: 'Kyoto Asian Grille',
-                  address: {
-                    '@type': 'PostalAddress',
-                    streetAddress: '4102 Market Street',
-                    addressLocality: 'Wilmington',
-                    addressRegion: 'NC',
-                    addressCountry: 'US',
-                  },
-                  telephone: '(910) 332-3302',
-                  url: 'https://kyotoasiangrille.com',
-                })
-              }}
-            />
+      {/* ── PRODUCT GRID ── */}
+      <section id="shop" ref={shopRef} className="section section--dark">
+        <div className="container">
+          <h2 className="section__title">
+            {lang === 'en' ? 'Inventory' : 'Inventario'}
+          </h2>
 
-                  <div className="menu-item-text">
-                    <div className="menu-item-name">{item.name}</div>
-                    {item.desc && <div className="menu-item-desc">{item.desc}</div>}
-                    {item.badge && <span className="menu-item-badge">{item.badge}</span>}
+          {/* Filters */}
+          <div className="filters">
+            <div className="filters__cats">
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat.slug}
+                  className={`filter-btn${activeCat === cat.slug ? ' filter-btn--active' : ''}`}
+                  onClick={() => setActiveCat(cat.slug)}
+                >
+                  {cat.label[lang]}
+                </button>
+              ))}
+            </div>
+            <div className="filters__locs">
+              {LOCATIONS.map(loc => (
+                <button
+                  key={loc}
+                  className={`filter-btn${activeLoc === loc ? ' filter-btn--active' : ''}`}
+                  onClick={() => setActiveLoc(loc)}
+                >
+                  {loc}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Grid */}
+          {filtered.length === 0 ? (
+            <p className="no-results">{t.noProducts[lang]}</p>
+          ) : (
+            <div className="product-grid">
+              {filtered.map(product => (
+                <div key={product.id} className="product-card">
+                  {product.featured && (
+                    <span className="badge badge--featured">{t.featured[lang]}</span>
+                  )}
+                  {product.original_price_cents && (
+                    <span className="badge badge--sale">{t.sale[lang]}</span>
+                  )}
+                  <div className="product-card__img-wrap">
+                    {product.primary_image_url ? (
+                      <img
+                        src={product.primary_image_url}
+                        alt={product.name}
+                        className="product-card__img"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="product-card__img-placeholder">🏍️</div>
+                    )}
+                    {product.location && (
+                      <span className="product-card__loc">{product.location}</span>
+                    )}
                   </div>
-                  <div className="menu-item-right">
-                    {itemImg && <img src={itemImg} alt="" className="menu-item-img" />}
-                    <div className="menu-item-price">{item.price}</div>
+                  <div className="product-card__body">
+                    <p className="product-card__cat">
+                      {CATEGORIES.find(c => c.slug === product.category)?.label[lang] || product.category}
+                    </p>
+                    <h3 className="product-card__name">{product.name}</h3>
+                    {product.description && (
+                      <p className="product-card__desc">{product.description}</p>
+                    )}
+                    <div className="product-card__footer">
+                      <div className="product-card__price">
+                        <span className="price--current">{fmt(product.price_cents)}</span>
+                        {product.original_price_cents && (
+                          <span className="price--original">{fmt(product.original_price_cents)}</span>
+                        )}
+                      </div>
+                      <button
+                        className={`btn${product.in_stock ? ' btn--primary' : ' btn--disabled'}`}
+                        disabled={!product.in_stock}
+                        onClick={() => addToCart(product)}
+                      >
+                        {product.in_stock ? t.addToCart[lang] : t.outOfStock[lang]}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
-          <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
-            <OrderButton />
+      {/* ── CONTACT ── */}
+      <section id="contact" className="section section--contact">
+        <div className="container contact-grid">
+          <div className="contact-block">
+            <h2 className="contact-block__title">{t.contactUs[lang]}</h2>
+            <p className="contact-block__sub">{t.phone[lang]}: <strong>(910) 555-0100</strong></p>
+            <p className="contact-block__sub">dirtbikz@example.com</p>
+          </div>
+          <div className="contact-block">
+            <h2 className="contact-block__title">{t.locations[lang]}</h2>
+            <p className="contact-block__sub">📍 Wilmington, NC</p>
+            <p className="contact-block__sub">📍 Myrtle Beach, SC</p>
+            <p className="contact-block__sub">📍 Savannah, GA</p>
+          </div>
+          <div className="contact-block">
+            <h2 className="contact-block__title">Hours</h2>
+            <p className="contact-block__sub">Mon–Sat: 9am – 6pm</p>
+            <p className="contact-block__sub">Sunday: By appointment</p>
           </div>
         </div>
       </section>
 
-      {/* REVIEWS */}
-      <section className="reviews-section" id="reviews">
-        <div className="reviews-container">
-          <div style={{ textAlign: 'center' }}>
-            <span className="section-label">Reviews</span>
-            <h2 className="section-title">What Wilmington Says</h2>
-            <div className="divider"><span>◆</span></div>
-          </div>
-
-          <div className="reviews-grid">
-            {REVIEWS.map((r, i) => (
-              <div className="review-card" key={i}>
-                <div className="review-stars">{'★'.repeat(r.stars)}</div>
-                <div className="review-text">"{r.text}"</div>
-                <div className="review-author">{r.author}</div>
-                <div className="review-source">{r.source}</div>
+      {/* ── CART DRAWER ── */}
+      {cartOpen && (
+        <div className="cart-overlay" onClick={() => setCartOpen(false)}>
+          <div className="cart-drawer" onClick={e => e.stopPropagation()}>
+            <div className="cart-drawer__header">
+              <h2>{t.cart[lang]} {cartCount > 0 ? `(${cartCount})` : ''}</h2>
+              <button className="cart-drawer__close" onClick={() => setCartOpen(false)}>✕</button>
+            </div>
+            <div className="cart-drawer__items">
+              {cart.length === 0 ? (
+                <p className="cart-empty">{t.cartEmpty[lang]}</p>
+              ) : cart.map(item => (
+                <div key={item.product.id} className="cart-item">
+                  {item.product.primary_image_url && (
+                    <img src={item.product.primary_image_url} alt={item.product.name} className="cart-item__img" />
+                  )}
+                  <div className="cart-item__info">
+                    <p className="cart-item__name">{item.product.name}</p>
+                    <p className="cart-item__price">{fmt(item.product.price_cents)} × {item.quantity}</p>
+                  </div>
+                  <button className="cart-item__remove" onClick={() => removeFromCart(item.product.id)}>
+                    {t.remove[lang]}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {cart.length > 0 && (
+              <div className="cart-drawer__footer">
+                <div className="cart-total">
+                  <span>{t.total[lang]}</span>
+                  <span>{fmt(cartTotal)}</span>
+                </div>
+                <button className="btn btn--primary btn--full" onClick={() => { setCartOpen(false); setCheckoutOpen(true) }}>
+                  {t.checkout[lang]}
+                </button>
               </div>
-            ))}
+            )}
           </div>
         </div>
-      </section>
+      )}
 
-      {/* INFO BAR */}
-      <section className="info-bar" id="info">
-        <div className="info-grid">
-          <div className="info-card">
-            <div className="info-icon">📍</div>
-            <div className="info-label">Location</div>
-            <div className="info-value">
-              <a href="https://maps.google.com/?q=4102+Market+St+Wilmington+NC" target="_blank" rel="noopener">
-                4102 Market Street<br/>Wilmington, NC 28403
-              </a>
+      {/* ── CHECKOUT MODAL ── */}
+      {checkoutOpen && (
+        <div className="modal-overlay" onClick={() => setCheckoutOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal__header">
+              <h2>{t.checkoutTitle[lang]}</h2>
+              <button className="modal__close" onClick={() => setCheckoutOpen(false)}>✕</button>
             </div>
-          </div>
-          <div className="info-card">
-            <div className="info-icon">📞</div>
-            <div className="info-label">Phone</div>
-            <div className="info-value">
-              <a href="tel:+19103323302">(910) 332-3302</a>
-            </div>
-          </div>
-          <div className="info-card">
-            <div className="info-icon">🕐</div>
-            <div className="info-label">Lunch</div>
-            <div className="info-value">Mon–Sat 11am–3pm</div>
-          </div>
-          <div className="info-card">
-            <div className="info-icon">🌙</div>
-            <div className="info-label">Dinner</div>
-            <div className="info-value">Mon–Sat 5pm–9:30pm</div>
-          </div>
-          <div className="info-card">
-            <div className="info-icon">🚫</div>
-            <div className="info-label">Closed</div>
-            <div className="info-value">Sunday</div>
+            <form onSubmit={handleCheckout} className="checkout-form">
+              <h3 className="checkout-form__section">{t.yourInfo[lang]}</h3>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>{t.firstName[lang]}</label>
+                  <input
+                    required
+                    value={form.firstName}
+                    onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))}
+                    placeholder="John"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>{t.lastName[lang]}</label>
+                  <input
+                    required
+                    value={form.lastName}
+                    onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Smith"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>{t.email[lang]}</label>
+                <input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="john@example.com"
+                />
+              </div>
+              <div className="form-group">
+                <label>{t.phone2[lang]}</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="(910) 555-0100"
+                />
+              </div>
+
+              <div className="checkout-summary">
+                {cart.map(item => (
+                  <div key={item.product.id} className="checkout-summary__row">
+                    <span>{item.product.name} × {item.quantity}</span>
+                    <span>{fmt(item.product.price_cents * item.quantity)}</span>
+                  </div>
+                ))}
+                <div className="checkout-summary__total">
+                  <span>{t.total[lang]}</span>
+                  <span>{fmt(cartTotal)}</span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn--primary btn--full"
+                disabled={checkoutLoading}
+              >
+                {checkoutLoading ? t.processing[lang] : t.placeOrder[lang]}
+              </button>
+            </form>
           </div>
         </div>
-      </section>
+      )}
 
-      <ReservationModal isOpen={showReservation} onClose={() => setShowReservation(false)} />
-
-      {/* FOOTER */}
-      <footer>
-        <p>
-          © 2026 Kyoto Asian Grille — 4102 Market Street, Wilmington, NC 28403 —{' '}
-          <a href="tel:+19103323302">(910) 332-3302</a>
-        </p>
-        <p style={{ marginTop: '0.5rem', fontSize: '0.7rem' }}>
-          <a href="https://www.instagram.com/kyotoasiangrille" target="_blank" rel="noopener">Instagram</a>
-          {' · '}
-          <a href="https://www.facebook.com/KyotoAsianGrille" target="_blank" rel="noopener">Facebook</a>
-          {' · '}
-          <OrderButton />
-        </p>
-      </footer>
+      {/* JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Store',
+          name: 'DIRTBIKZ',
+          description: 'Dirt bikes, ATVs, side-by-sides, go-carts, and parts. NC · SC · GA.',
+          telephone: '(910) 555-0100',
+          address: { '@type': 'PostalAddress', addressLocality: 'Wilmington', addressRegion: 'NC', addressCountry: 'US' },
+          url: 'https://dirtbikz.com',
+          areaServed: ['Wilmington NC', 'Myrtle Beach SC', 'Savannah GA'],
+        })}}
+      />
     </>
-  );
+  )
 }

@@ -1,139 +1,110 @@
-'use client';
+'use client'
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react'
 
 interface Message {
-  role: 'user' | 'assistant';
-  content: string;
+  role: 'user' | 'assistant'
+  content: string
 }
 
-export default function ChatBot() {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Welcome to Kyoto Asian Grille! 🥢 I\'m Yuki, your virtual host. Ask me about our menu, specials, gluten-free options, or anything else. How can I help?'
-    }
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const messagesRef = useRef<HTMLDivElement>(null);
+interface Props {
+  lang?: 'en' | 'es'
+}
+
+export default function ChatBot({ lang = 'en' }: Props) {
+  const [open, setOpen] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    content: lang === 'es'
+      ? '¡Hola! Soy el asistente de DIRTBIKZ. Pregúntame sobre inventario, partes, precios o ubicaciones. ¿En qué te puedo ayudar?'
+      : "Hey! I'm the DIRTBIKZ assistant. Ask me about inventory, parts, pricing, or locations. What are you looking for?",
+  }])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (messagesRef.current) {
-      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight
     }
-  }, [messages, loading]);
+  }, [messages, loading])
 
   const send = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+    const text = input.trim()
+    if (!text || loading) return
 
-    const userMsg: Message = { role: 'user', content: text };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
-    setInput('');
-    setLoading(true);
+    const next: Message[] = [...messages, { role: 'user', content: text }]
+    setMessages(next)
+    setInput('')
+    setLoading(true)
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updated }),
-      });
-
-      if (!res.ok) throw new Error('Chat failed');
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let botText = '';
-
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-      setLoading(false);
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          botText += chunk;
-          setMessages(prev => {
-            const copy = [...prev];
-            copy[copy.length - 1] = { role: 'assistant', content: botText };
-            return copy;
-          });
-        }
+        body: JSON.stringify({ messages: next, lang }),
+      })
+      if (!res.body) throw new Error('no body')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let reply = ''
+      setMessages(m => [...m, { role: 'assistant', content: '' }])
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        reply += decoder.decode(value, { stream: true })
+        setMessages(m => m.map((msg, i) => i === m.length - 1 ? { ...msg, content: reply } : msg))
       }
     } catch {
-      setLoading(false);
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, I\'m having trouble connecting. Please call us at (910) 332-3302 and we\'ll be happy to help!' }
-      ]);
+      setMessages(m => [...m, { role: 'assistant', content: lang === 'es' ? 'Lo siento, algo salió mal. Llámanos al (910) 555-0100.' : 'Sorry, something went wrong. Call us at (910) 555-0100.' }])
+    } finally {
+      setLoading(false)
     }
-  };
-
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
-
-  // Detect language for bilingual greeting
-  const detectLang = (text: string) => {
-    const esWords = ['hola', 'menú', 'comida', 'quiero', 'precio', 'reservar', 'gracias', 'por favor'];
-    return esWords.some(w => text.toLowerCase().includes(w)) ? 'es' : 'en';
-  };
+  }
 
   return (
     <>
       <button
-        className={`chatbot-bubble ${open ? 'open' : ''}`}
-        onClick={() => setOpen(!open)}
-        aria-label={open ? 'Close chat' : 'Open chat'}
+        className="chat-bubble"
+        onClick={() => setOpen(o => !o)}
+        aria-label="Open chat"
       >
-        {open ? '✕' : '🥢'}
+        {open ? '✕' : '🏍️'}
       </button>
 
       {open && (
-        <div className="chatbot-panel">
-          <div className="chatbot-header">
-            <div className="chatbot-avatar">🍣</div>
-            <div className="chatbot-header-text">
-              <h4>Yuki — Kyoto Virtual Host</h4>
-              <span><span className="chatbot-online"></span>Online now</span>
-            </div>
+        <div className="chat-panel">
+          <div className="chat-panel__header">
+            <span className="chat-panel__title">DIRTBIKZ AI</span>
+            <button className="chat-panel__close" onClick={() => setOpen(false)}>✕</button>
           </div>
 
-          <div className="chatbot-messages" ref={messagesRef}>
+          <div className="chat-panel__messages" ref={messagesRef}>
             {messages.map((msg, i) => (
-              <div key={i} className={`chat-msg ${msg.role === 'user' ? 'user' : 'bot'}`}>
+              <div key={i} className={`chat-msg chat-msg--${msg.role}`}>
                 {msg.content}
               </div>
             ))}
             {loading && (
-              <div className="chat-typing">
-                <span></span><span></span><span></span>
+              <div className="chat-msg chat-msg--assistant chat-msg--loading">
+                <span className="dot" /><span className="dot" /><span className="dot" />
               </div>
             )}
           </div>
 
-          <div className="chatbot-input">
+          <div className="chat-panel__input">
             <input
-              type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Ask about our menu, hours, GF options..."
-              autoFocus
+              onKeyDown={e => e.key === 'Enter' && send()}
+              placeholder={lang === 'es' ? 'Pregunta sobre inventario...' : 'Ask about inventory...'}
             />
-            <button onClick={send} disabled={loading} aria-label="Send">
-              ➤
+            <button onClick={send} disabled={loading}>
+              {lang === 'es' ? 'Enviar' : 'Send'}
             </button>
           </div>
         </div>
       )}
     </>
-  );
+  )
 }

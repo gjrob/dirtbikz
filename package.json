@@ -1,5 +1,5 @@
 {
-  "name": "kyoto-asian-grille",
+  "name": "dirtbikz",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -13,7 +13,8 @@
     "@supabase/supabase-js": "^2.98.0",
     "next": "^14.2.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "stripe": "^14.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",

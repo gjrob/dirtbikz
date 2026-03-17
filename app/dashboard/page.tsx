@@ -1,280 +1,385 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
 )
 
-const LEADS_TABLE = 'kyoto_reservations'
-const CLIENT_SLUG = 'kyoto'
-const ACCENT = '#c8607a'
-const ACCENT_TEXT = '#ffffff'
-
-interface Lead {
+interface Product {
   id: string
   name: string
-  phone?: string
-  party_size?: number
-  date?: string
-  status: string
+  category: string
+  brand?: string
+  year?: number
+  price_cents: number
+  location?: string
+  in_stock: boolean
+  featured: boolean
   created_at: string
 }
 
-interface NurtureMessage {
+interface Order {
   id: string
-  lead_name: string
-  phone: string
-  sequence_step: number
-  status: string
-  channel: string
-  scheduled_at: string
+  customer_name: string
+  customer_email: string
+  total_cents: number
+  payment_status: string
+  order_status: string
+  created_at: string
 }
 
-function NurtureTab() {
-  const [queue, setQueue] = useState<NurtureMessage[]>([])
-  const [stats, setStats] = useState({ pending: 0, sent: 0, failed: 0, opted_out: 0 })
+const STATUS_COLORS: Record<string, string> = {
+  paid: '#22c55e',
+  pending: '#f59e0b',
+  failed: '#ef4444',
+  refunded: '#6b7280',
+  new: '#3b82f6',
+  confirmed: '#22c55e',
+  shipped: '#8b5cf6',
+  delivered: '#10b981',
+  cancelled: '#ef4444',
+}
 
-  useEffect(() => {
-    supabase
-      .from('nurture_queue')
-      .select('*')
-      .eq('client_slug', CLIENT_SLUG)
-      .order('scheduled_at', { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
-        if (data) {
-          setQueue(data)
-          setStats({
-            pending:   data.filter(m => m.status === 'pending').length,
-            sent:      data.filter(m => m.status === 'sent').length,
-            failed:    data.filter(m => m.status === 'failed').length,
-            opted_out: data.filter(m => m.status === 'opted_out').length,
-          })
-        }
-      })
-  }, [])
+function fmt(cents: number) {
+  return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0 })
+}
 
-  const statusColor: Record<string, string> = {
-    pending: '#ffaa00', sent: ACCENT, failed: '#ff4444', opted_out: '#6b7a8d',
-  }
-
-  return (
-    <div style={{ margin: '24px 32px 48px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '1px', background: '#1a2332', marginBottom: '24px' }}>
-        {[
-          { label: 'PENDING',  value: stats.pending,   color: '#ffaa00' },
-          { label: 'SENT',     value: stats.sent,      color: ACCENT },
-          { label: 'FAILED',   value: stats.failed,    color: '#ff4444' },
-          { label: 'OPT-OUT',  value: stats.opted_out, color: '#6b7a8d' },
-        ].map(s => (
-          <div key={s.label} style={{ background: '#080b0f', padding: '20px 24px' }}>
-            <div style={{ fontSize: '10px', color: '#6b7a8d', letterSpacing: '.1em' }}>{s.label}</div>
-            <div style={{ fontSize: '40px', fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: '10px', color: ACCENT, letterSpacing: '.15em', marginBottom: '12px' }}>// NURTURE QUEUE</div>
-      {queue.length === 0 ? (
-        <div style={{ color: '#6b7a8d', padding: '48px', textAlign: 'center', border: '1px solid #1a2332' }}>NO MESSAGES QUEUED YET</div>
-      ) : (
-        <div style={{ border: '1px solid #1a2332' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 80px 60px 90px', padding: '10px 16px', background: '#0f1419', fontSize: '10px', color: '#6b7a8d', letterSpacing: '.1em', borderBottom: '1px solid #1a2332' }}>
-            <span>NAME</span><span>SCHEDULED</span><span>STEP</span><span>CH</span><span>STATUS</span>
-          </div>
-          {queue.map((msg, i) => (
-            <div key={msg.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 80px 60px 90px', padding: '12px 16px', fontSize: '12px', borderBottom: i < queue.length - 1 ? '1px solid #0d1117' : 'none', background: i % 2 === 0 ? '#080b0f' : '#0a0e13', alignItems: 'center' }}>
-              <span style={{ color: '#f0f4f8', fontWeight: 600 }}>{msg.lead_name}</span>
-              <span style={{ color: '#6b7a8d' }}>{new Date(msg.scheduled_at).toLocaleDateString()}</span>
-              <span style={{ color: '#6b7a8d' }}>Step {msg.sequence_step}</span>
-              <span style={{ color: '#6b7a8d' }}>{msg.channel.toUpperCase()}</span>
-              <span style={{ color: statusColor[msg.status] || '#666' }}>{msg.status.toUpperCase().replace('_', '-')}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function Dashboard() {
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [stats, setStats] = useState({ today: 0, week: 0, total: 0 })
+  const [products, setProducts] = useState<Product[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [tab, setTab] = useState<'products' | 'orders'>('products')
   const [loading, setLoading] = useState(true)
-  const [overlayActive, setOverlayActive] = useState(false)
-  const [overlayMsg, setOverlayMsg] = useState('')
-  const [activeTab, setActiveTab] = useState<'leads' | 'nurture'>('leads')
 
-  useEffect(() => {
-    fetchLeads()
-    fetchVenueStatus()
-    const sub = supabase.channel('kyoto-reservations')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: LEADS_TABLE, filter: `client_slug=eq.${CLIENT_SLUG}` },
-        (payload) => {
-          setLeads(prev => [payload.new as Lead, ...prev])
-          setStats(prev => ({ ...prev, today: prev.today + 1, total: prev.total + 1 }))
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(sub) }
-  }, [])
-
-  async function fetchVenueStatus() {
-    const { data } = await supabase.from('venue_status').select('is_open,specials_text').eq('client_slug', CLIENT_SLUG).single()
-    if (data) {
-      setOverlayActive(data.is_open)
-      setOverlayMsg(data.specials_text || '')
-    }
-  }
-
-  async function fetchLeads() {
-    const { data } = await supabase.from(LEADS_TABLE).select('*').eq('client_slug', CLIENT_SLUG).order('created_at', { ascending: false }).limit(200)
-    if (data) {
-      setLeads(data)
-      const today = new Date().toDateString()
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      setStats({
-        today: data.filter(l => new Date(l.created_at).toDateString() === today).length,
-        week: data.filter(l => new Date(l.created_at) >= weekAgo).length,
-        total: data.length,
-      })
-    }
-    setLoading(false)
-  }
-
-  async function updateStatus(id: string, status: string) {
-    await supabase.from(LEADS_TABLE).update({ status }).eq('id', id)
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
-  }
-
-  function exportCSV() {
-    if (!leads.length) return
-    const headers = Object.keys(leads[0]).join(',')
-    const rows = leads.map(l => Object.values(l).map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob([headers + '\n' + rows], { type: 'text/csv' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-    a.download = `kyoto-reservations-${new Date().toISOString().split('T')[0]}.csv`; a.click()
-  }
-
-  const statusColor = (s: string) => (
-    ({ pending: '#ffaa00', confirmed: '#39ff14', completed: '#00d4ff', cancelled: '#ff4444' } as Record<string, string>)[s] || '#666'
-  )
-
-  const tabStyle = (tab: 'leads' | 'nurture') => ({
-    padding: '10px 28px',
-    cursor: 'pointer' as const,
-    fontFamily: 'monospace',
-    fontSize: '11px',
-    letterSpacing: '.1em',
-    fontWeight: 700,
-    border: 'none',
-    background: 'transparent',
-    color: activeTab === tab ? ACCENT : '#6b7a8d',
-    borderBottom: activeTab === tab ? `2px solid ${ACCENT}` : '2px solid transparent',
+  // Add product form
+  const [showAdd, setShowAdd] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [newProduct, setNewProduct] = useState({
+    name: '', category: 'dirt-bike', brand: '', year: '', price: '',
+    location: 'NC', description: '', primary_image_url: '',
   })
 
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const [{ data: prods }, { data: ords }] = await Promise.all([
+        supabase.from('products').select('*').eq('client_slug', 'dirtbikz').order('created_at', { ascending: false }),
+        supabase.from('orders').select('*').eq('client_slug', 'dirtbikz').order('created_at', { ascending: false }),
+      ])
+      if (prods) setProducts(prods)
+      if (ords) setOrders(ords)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function toggleStock(id: string, current: boolean) {
+    await supabase.from('products').update({ in_stock: !current }).eq('id', id)
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, in_stock: !current } : p))
+  }
+
+  async function toggleFeatured(id: string, current: boolean) {
+    await supabase.from('products').update({ featured: !current }).eq('id', id)
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, featured: !current } : p))
+  }
+
+  async function deleteProduct(id: string) {
+    if (!confirm('Delete this product?')) return
+    await supabase.from('products').delete().eq('id', id)
+    setProducts(prev => prev.filter(p => p.id !== id))
+  }
+
+  async function addProduct(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    const { data } = await supabase.from('products').insert({
+      client_slug: 'dirtbikz',
+      name: newProduct.name,
+      category: newProduct.category,
+      brand: newProduct.brand || null,
+      year: newProduct.year ? parseInt(newProduct.year) : null,
+      price_cents: Math.round(parseFloat(newProduct.price) * 100),
+      location: newProduct.location || null,
+      description: newProduct.description || null,
+      primary_image_url: newProduct.primary_image_url || null,
+      in_stock: true,
+      featured: false,
+    }).select().single()
+    if (data) setProducts(prev => [data, ...prev])
+    setShowAdd(false)
+    setNewProduct({ name: '', category: 'dirt-bike', brand: '', year: '', price: '', location: 'NC', description: '', primary_image_url: '' })
+    setSaving(false)
+  }
+
+  async function updateOrderStatus(id: string, field: 'payment_status' | 'order_status', value: string) {
+    await supabase.from('orders').update({ [field]: value }).eq('id', id)
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, [field]: value } : o))
+  }
+
+  async function logout() {
+    await fetch('/api/admin/auth', { method: 'DELETE' })
+    window.location.href = '/admin/login'
+  }
+
+  // Stats
+  const totalRevenue = orders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + o.total_cents, 0)
+  const inStockCount = products.filter(p => p.in_stock).length
+  const paidOrders = orders.filter(o => o.payment_status === 'paid').length
+
+  const S = {
+    page: { minHeight: '100vh', background: '#0a0a0a', color: '#fff', fontFamily: 'Inter, sans-serif' } as React.CSSProperties,
+    header: { background: '#111', borderBottom: '1px solid rgba(255,107,53,0.2)', padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' } as React.CSSProperties,
+    logo: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '24px', color: '#ff6b35', letterSpacing: '2px' } as React.CSSProperties,
+    body: { maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' } as React.CSSProperties,
+    stats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '32px' } as React.CSSProperties,
+    statCard: { background: '#1a1a1a', border: '1px solid rgba(255,107,53,0.15)', borderRadius: '8px', padding: '20px' } as React.CSSProperties,
+    statNum: { fontSize: '28px', fontWeight: 700, color: '#ff6b35', display: 'block', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '1px' } as React.CSSProperties,
+    statLabel: { fontSize: '12px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' as const, letterSpacing: '1px' },
+    tabs: { display: 'flex', gap: '8px', marginBottom: '24px' } as React.CSSProperties,
+    tab: (active: boolean): React.CSSProperties => ({
+      padding: '8px 20px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+      background: active ? '#ff6b35' : '#1a1a1a',
+      color: active ? '#fff' : 'rgba(255,255,255,0.6)',
+      fontFamily: "'Bebas Neue', sans-serif", fontSize: '14px', letterSpacing: '1px',
+    }),
+    table: { width: '100%', borderCollapse: 'collapse' as const },
+    th: { textAlign: 'left' as const, padding: '10px 12px', fontSize: '11px', textTransform: 'uppercase' as const, letterSpacing: '1px', color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.08)' },
+    td: { padding: '12px', fontSize: '13px', borderBottom: '1px solid rgba(255,255,255,0.05)', verticalAlign: 'middle' as const },
+    badge: (color: string): React.CSSProperties => ({
+      display: 'inline-block', padding: '2px 8px', borderRadius: '4px',
+      fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' as const,
+      background: color + '22', color, letterSpacing: '0.5px',
+    }),
+    btn: (variant: 'primary' | 'ghost' | 'danger'): React.CSSProperties => ({
+      padding: '6px 12px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '12px',
+      background: variant === 'primary' ? '#ff6b35' : variant === 'danger' ? '#ef444422' : 'rgba(255,255,255,0.08)',
+      color: variant === 'danger' ? '#ef4444' : '#fff',
+    }),
+    addBtn: { background: '#ff6b35', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: 'pointer', fontFamily: "'Bebas Neue', sans-serif", fontSize: '14px', letterSpacing: '1px' } as React.CSSProperties,
+    modal: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+    modalInner: { background: '#1a1a1a', border: '1px solid rgba(255,107,53,0.2)', borderRadius: '8px', padding: '32px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' as const },
+    input: { width: '100%', background: '#0a0a0a', border: '1px solid rgba(255,107,53,0.3)', borderRadius: '4px', padding: '8px 10px', color: '#fff', fontSize: '14px', boxSizing: 'border-box' as const, marginTop: '4px' },
+    label: { display: 'block' as const, fontSize: '12px', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginTop: '12px' },
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: '#080b0f', color: '#f0f4f8', fontFamily: 'monospace' }}>
-      {/* Header */}
-      <div style={{ borderBottom: `2px solid ${ACCENT}`, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: '10px', color: ACCENT, letterSpacing: '.15em' }}>// DASHBOARD</div>
-          <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '.05em' }}>KYOTO ASIAN GRILLE</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <span style={{ fontSize: '22px', color: ACCENT, fontWeight: 400, letterSpacing: '.05em', opacity: 0.85 }}>京都</span>
-          <button onClick={exportCSV} style={{ background: 'transparent', border: `1px solid ${ACCENT}`, color: ACCENT, padding: '8px 20px', cursor: 'pointer', fontFamily: 'monospace', fontSize: '11px', letterSpacing: '.1em' }}>
-            EXPORT CSV
-          </button>
-        </div>
-      </div>
+    <div style={S.page}>
+      <header style={S.header}>
+        <span style={S.logo}>DIRTBIKZ Admin</span>
+        <button onClick={logout} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.6)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+          Logout
+        </button>
+      </header>
 
-      {/* Tab bar */}
-      <div style={{ borderBottom: '1px solid #1a2332', display: 'flex', padding: '0 32px' }}>
-        <button onClick={() => setActiveTab('leads')} style={tabStyle('leads')}>LEADS</button>
-        <button onClick={() => setActiveTab('nurture')} style={tabStyle('nurture')}>NURTURE</button>
-      </div>
-
-      {activeTab === 'leads' ? (
-        <>
-          {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '1px', background: '#1a2332' }}>
-            {[{ label: 'TODAY', value: stats.today }, { label: 'THIS WEEK', value: stats.week }, { label: 'ALL TIME', value: stats.total }].map(s => (
-              <div key={s.label} style={{ background: '#080b0f', padding: '28px 32px' }}>
-                <div style={{ fontSize: '10px', color: '#6b7a8d', letterSpacing: '.1em', marginBottom: '8px' }}>{s.label}</div>
-                <div style={{ fontSize: '56px', fontWeight: 700, color: ACCENT, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: '10px', color: '#6b7a8d', marginTop: '4px' }}>RESERVATIONS</div>
-              </div>
-            ))}
+      <div style={S.body}>
+        {/* Stats */}
+        <div style={S.stats}>
+          <div style={S.statCard}>
+            <span style={S.statNum}>{products.length}</span>
+            <span style={S.statLabel}>Total Products</span>
           </div>
+          <div style={S.statCard}>
+            <span style={S.statNum}>{inStockCount}</span>
+            <span style={S.statLabel}>In Stock</span>
+          </div>
+          <div style={S.statCard}>
+            <span style={S.statNum}>{orders.length}</span>
+            <span style={S.statLabel}>Total Orders</span>
+          </div>
+          <div style={S.statCard}>
+            <span style={S.statNum}>{paidOrders}</span>
+            <span style={S.statLabel}>Paid Orders</span>
+          </div>
+          <div style={S.statCard}>
+            <span style={S.statNum}>{fmt(totalRevenue)}</span>
+            <span style={S.statLabel}>Revenue</span>
+          </div>
+        </div>
 
-          {/* Overlay Control */}
-          <div style={{ margin: '24px 32px', border: '1px solid #1a2332', padding: '20px' }}>
-            <div style={{ fontSize: '10px', color: ACCENT, letterSpacing: '.15em', marginBottom: '12px' }}>// OVERLAY CONTROL</div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <input
-                value={overlayMsg}
-                onChange={e => setOverlayMsg(e.target.value)}
-                placeholder="e.g. Hibachi available tonight — reserve your seat"
-                style={{ flex: 1, background: '#0f1419', border: '1px solid #1a2332', color: '#f0f4f8', padding: '10px 16px', fontFamily: 'monospace', fontSize: '13px', outline: 'none' }}
-              />
-              <button
-                onClick={async () => {
-                  const next = !overlayActive
-                  setOverlayActive(next)
-                  await supabase.from('venue_status').upsert(
-                    { client_slug: CLIENT_SLUG, is_open: next, specials_text: overlayMsg },
-                    { onConflict: 'client_slug' }
-                  )
-                }}
-                style={{ background: overlayActive ? '#ff4444' : ACCENT, color: ACCENT_TEXT, border: 'none', padding: '10px 28px', cursor: 'pointer', fontFamily: 'monospace', fontWeight: 700, fontSize: '12px', letterSpacing: '.1em' }}
-              >
-                {overlayActive ? 'STOP' : 'GO LIVE'}
-              </button>
+        {/* Tabs */}
+        <div style={S.tabs}>
+          <button style={S.tab(tab === 'products')} onClick={() => setTab('products')}>Products</button>
+          <button style={S.tab(tab === 'orders')} onClick={() => setTab('orders')}>Orders</button>
+        </div>
+
+        {/* Products tab */}
+        {tab === 'products' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+              <button style={S.addBtn} onClick={() => setShowAdd(true)}>+ Add Product</button>
             </div>
-            {overlayActive && (
-              <div style={{ marginTop: '12px', padding: '10px 16px', background: 'rgba(220,38,38,.06)', border: `1px solid ${ACCENT}`, fontSize: '12px', color: ACCENT }}>
-                ● LIVE — &quot;{overlayMsg || 'No message set'}&quot;
-              </div>
-            )}
-          </div>
-
-          {/* Table */}
-          <div style={{ margin: '0 32px 48px' }}>
-            <div style={{ fontSize: '10px', color: ACCENT, letterSpacing: '.15em', marginBottom: '12px' }}>// RESERVATIONS — REAL TIME</div>
             {loading ? (
-              <div style={{ color: '#6b7a8d', padding: '48px', textAlign: 'center' }}>LOADING...</div>
-            ) : leads.length === 0 ? (
-              <div style={{ color: '#6b7a8d', padding: '48px', textAlign: 'center', border: '1px solid #1a2332' }}>NO RESERVATIONS YET</div>
+              <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading...</p>
             ) : (
-              <div style={{ border: '1px solid #1a2332' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.75fr 1fr 1fr', padding: '10px 16px', background: '#0f1419', fontSize: '10px', color: '#6b7a8d', letterSpacing: '.1em', borderBottom: '1px solid #1a2332' }}>
-                  <span>NAME</span><span>PHONE</span><span>PARTY SIZE</span><span>DATE</span><span>STATUS</span>
-                </div>
-                {leads.map((lead, i) => (
-                  <div key={lead.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.75fr 1fr 1fr', padding: '14px 16px', fontSize: '12px', borderBottom: i < leads.length - 1 ? '1px solid #0d1117' : 'none', background: i % 2 === 0 ? '#080b0f' : '#0a0e13', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, color: '#f0f4f8' }}>{lead.name}</span>
-                    <span style={{ color: '#6b7a8d' }}>{lead.phone || '—'}</span>
-                    <span style={{ color: '#6b7a8d', textAlign: 'center' }}>{lead.party_size ?? '—'}</span>
-                    <span style={{ color: '#6b7a8d' }}>{lead.date || '—'}</span>
-                    <select
-                      value={lead.status}
-                      onChange={e => updateStatus(lead.id, e.target.value)}
-                      style={{ background: '#0f1419', border: `1px solid ${statusColor(lead.status)}`, color: statusColor(lead.status), padding: '4px 8px', fontSize: '10px', fontFamily: 'monospace', cursor: 'pointer' }}
-                    >
-                      <option value="pending">PENDING</option>
-                      <option value="confirmed">CONFIRMED</option>
-                      <option value="completed">COMPLETED</option>
-                      <option value="cancelled">CANCELLED</option>
-                    </select>
-                  </div>
-                ))}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={S.table}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Name</th>
+                      <th style={S.th}>Category</th>
+                      <th style={S.th}>Price</th>
+                      <th style={S.th}>Loc</th>
+                      <th style={S.th}>Stock</th>
+                      <th style={S.th}>Featured</th>
+                      <th style={S.th}>Added</th>
+                      <th style={S.th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map(p => (
+                      <tr key={p.id}>
+                        <td style={S.td}>
+                          <div style={{ fontWeight: 500 }}>{p.name}</div>
+                          {p.brand && <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{p.brand}{p.year ? ` · ${p.year}` : ''}</div>}
+                        </td>
+                        <td style={S.td}><span style={S.badge('#ff6b35')}>{p.category}</span></td>
+                        <td style={{ ...S.td, color: '#ff6b35', fontWeight: 600 }}>{fmt(p.price_cents)}</td>
+                        <td style={S.td}>{p.location || '—'}</td>
+                        <td style={S.td}>
+                          <button style={S.btn(p.in_stock ? 'primary' : 'ghost')} onClick={() => toggleStock(p.id, p.in_stock)}>
+                            {p.in_stock ? 'In Stock' : 'Out'}
+                          </button>
+                        </td>
+                        <td style={S.td}>
+                          <button style={S.btn(p.featured ? 'primary' : 'ghost')} onClick={() => toggleFeatured(p.id, p.featured)}>
+                            {p.featured ? '★ Yes' : '☆ No'}
+                          </button>
+                        </td>
+                        <td style={{ ...S.td, fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>{fmtDate(p.created_at)}</td>
+                        <td style={S.td}>
+                          <button style={S.btn('danger')} onClick={() => deleteProduct(p.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {products.length === 0 && (
+                  <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: '40px' }}>No products yet.</p>
+                )}
               </div>
             )}
+          </>
+        )}
+
+        {/* Orders tab */}
+        {tab === 'orders' && (
+          loading ? (
+            <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading...</p>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>Customer</th>
+                    <th style={S.th}>Total</th>
+                    <th style={S.th}>Payment</th>
+                    <th style={S.th}>Status</th>
+                    <th style={S.th}>Date</th>
+                    <th style={S.th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.id}>
+                      <td style={S.td}>
+                        <div style={{ fontWeight: 500 }}>{o.customer_name}</div>
+                        <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>{o.customer_email}</div>
+                      </td>
+                      <td style={{ ...S.td, color: '#ff6b35', fontWeight: 600 }}>{fmt(o.total_cents)}</td>
+                      <td style={S.td}>
+                        <span style={S.badge(STATUS_COLORS[o.payment_status] || '#888')}>{o.payment_status}</span>
+                      </td>
+                      <td style={S.td}>
+                        <select
+                          value={o.order_status}
+                          onChange={e => updateOrderStatus(o.id, 'order_status', e.target.value)}
+                          style={{ background: '#0a0a0a', border: '1px solid rgba(255,107,53,0.3)', color: '#fff', borderRadius: '4px', padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          {['new', 'confirmed', 'shipped', 'delivered', 'cancelled'].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ ...S.td, fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>{fmtDate(o.created_at)}</td>
+                      <td style={S.td}>
+                        <a
+                          href={`mailto:${o.customer_email}`}
+                          style={{ ...S.btn('ghost'), textDecoration: 'none', display: 'inline-block' }}
+                        >
+                          Email
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {orders.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: '40px' }}>No orders yet.</p>
+              )}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Add Product Modal */}
+      {showAdd && (
+        <div style={S.modal} onClick={() => setShowAdd(false)}>
+          <div style={S.modalInner} onClick={e => e.stopPropagation()}>
+            <h2 style={{ color: '#ff6b35', fontFamily: "'Bebas Neue', sans-serif", fontSize: '24px', letterSpacing: '2px', marginBottom: '20px' }}>
+              Add Product
+            </h2>
+            <form onSubmit={addProduct}>
+              <label style={S.label}>Name *</label>
+              <input style={S.input} required value={newProduct.name} onChange={e => setNewProduct(p => ({ ...p, name: e.target.value }))} placeholder="2023 Honda CRF250R" />
+
+              <label style={S.label}>Category *</label>
+              <select style={S.input} value={newProduct.category} onChange={e => setNewProduct(p => ({ ...p, category: e.target.value }))}>
+                {['dirt-bike', 'atv', 'side-by-side', 'go-cart', '4-wheeler', 'fold-cart', 'parts', 'other'].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              <label style={S.label}>Brand</label>
+              <input style={S.input} value={newProduct.brand} onChange={e => setNewProduct(p => ({ ...p, brand: e.target.value }))} placeholder="Honda" />
+
+              <label style={S.label}>Year</label>
+              <input style={S.input} type="number" value={newProduct.year} onChange={e => setNewProduct(p => ({ ...p, year: e.target.value }))} placeholder="2023" />
+
+              <label style={S.label}>Price (USD) *</label>
+              <input style={S.input} type="number" step="0.01" required value={newProduct.price} onChange={e => setNewProduct(p => ({ ...p, price: e.target.value }))} placeholder="6999.00" />
+
+              <label style={S.label}>Location</label>
+              <select style={S.input} value={newProduct.location} onChange={e => setNewProduct(p => ({ ...p, location: e.target.value }))}>
+                <option value="NC">NC</option>
+                <option value="SC">SC</option>
+                <option value="GA">GA</option>
+              </select>
+
+              <label style={S.label}>Description</label>
+              <textarea style={{ ...S.input, height: '80px', resize: 'vertical' }} value={newProduct.description} onChange={e => setNewProduct(p => ({ ...p, description: e.target.value }))} placeholder="Condition, hours, extras..." />
+
+              <label style={S.label}>Image URL</label>
+              <input style={S.input} value={newProduct.primary_image_url} onChange={e => setNewProduct(p => ({ ...p, primary_image_url: e.target.value }))} placeholder="https://..." />
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
+                <button type="submit" disabled={saving} style={{ flex: 1, ...S.addBtn }}>
+                  {saving ? 'Saving...' : 'Add Product'}
+                </button>
+                <button type="button" onClick={() => setShowAdd(false)} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        </>
-      ) : (
-        <NurtureTab />
+        </div>
       )}
     </div>
   )
