@@ -4,13 +4,22 @@ import type { NextRequest } from 'next/server'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname.startsWith('/dashboard')) {
+  // Protect /admin/* except /admin/login
+  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     const session = request.cookies.get('admin_session')?.value
     const adminPassword = process.env.ADMIN_PASSWORD
 
     if (!adminPassword || session !== adminPassword) {
-      const loginUrl = new URL('/admin/login', request.url)
-      return NextResponse.redirect(loginUrl)
+      return NextResponse.redirect(new URL('/admin/login', request.url))
+    }
+  }
+
+  // Protect legacy /dashboard
+  if (pathname.startsWith('/dashboard')) {
+    const session = request.cookies.get('admin_session')?.value
+    const adminPassword = process.env.ADMIN_PASSWORD
+    if (!adminPassword || session !== adminPassword) {
+      return NextResponse.redirect(new URL('/admin/login', request.url))
     }
   }
 
@@ -18,5 +27,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: ['/admin/:path*', '/dashboard/:path*'],
 }
