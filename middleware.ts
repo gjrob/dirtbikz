@@ -23,9 +23,17 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Protect /seller/[id]/dashboard — require seller session cookie
+  if (pathname.match(/^\/seller\/[^/]+\/dashboard/)) {
+    const sellerSession = request.cookies.get('seller_session')?.value
+    if (!sellerSession) {
+      return NextResponse.redirect(new URL('/seller/onboarding', request.url))
+    }
+  }
+
   return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/dashboard/:path*'],
+  matcher: ['/admin/:path*', '/dashboard/:path*', '/seller/:path*'],
 }

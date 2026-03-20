@@ -4,11 +4,15 @@ import { useEffect, useState } from 'react'
 
 interface Analytics {
   revenue: { allTime: number; month: number; week: number; today: number }
+  commission: { allTime: number; month: number }
+  sellerPayouts: { allTime: number }
   orderCount: number
   paidCount: number
+  sellerCount: number
   statusCounts: Record<string, number>
   revenueByLocation: Record<string, number>
   topProducts: { name: string; count: number; revenue: number }[]
+  disputeSummary: { total: number; active: number; lostAmount: number }
 }
 
 function fmt(cents: number) {
@@ -60,7 +64,7 @@ export default function AdminAnalytics() {
       {/* Revenue cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
         {[
-          { label: 'All-Time Revenue',  value: data.revenue.allTime,  sub: `${data.paidCount} paid orders` },
+          { label: 'Gross Revenue',  value: data.revenue.allTime,  sub: `${data.paidCount} paid orders` },
           { label: 'This Month',        value: data.revenue.month,    sub: 'current calendar month' },
           { label: 'Last 7 Days',       value: data.revenue.week,     sub: 'rolling 7 days' },
           { label: 'Today',             value: data.revenue.today,    sub: 'since midnight' },
@@ -71,6 +75,35 @@ export default function AdminAnalytics() {
             <div style={sub}>{item.sub}</div>
           </div>
         ))}
+      </div>
+
+      {/* Platform commission row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginBottom: '28px' }}>
+        <div style={card}>
+          <div style={cardTitle}>Platform Commission (5%)</div>
+          <div style={{ ...bigNum, color: '#22c55e' }}>{fmt(data.commission.allTime)}</div>
+          <div style={sub}>all-time platform earnings</div>
+        </div>
+        <div style={card}>
+          <div style={cardTitle}>Commission This Month</div>
+          <div style={{ ...bigNum, color: '#22c55e' }}>{fmt(data.commission.month)}</div>
+          <div style={sub}>current month</div>
+        </div>
+        <div style={card}>
+          <div style={cardTitle}>Seller Payouts</div>
+          <div style={{ ...bigNum, color: '#f59e0b' }}>{fmt(data.sellerPayouts.allTime)}</div>
+          <div style={sub}>paid to sellers (95%)</div>
+        </div>
+        <div style={card}>
+          <div style={cardTitle}>Active Sellers</div>
+          <div style={bigNum}>{data.sellerCount}</div>
+          <div style={sub}>total registered</div>
+        </div>
+        <div style={card}>
+          <div style={cardTitle}>Disputes</div>
+          <div style={{ ...bigNum, color: data.disputeSummary.active > 0 ? '#ef4444' : '#22c55e' }}>{data.disputeSummary.total}</div>
+          <div style={sub}>{data.disputeSummary.active} active · {fmt(data.disputeSummary.lostAmount)} lost</div>
+        </div>
       </div>
 
       {/* Second row */}

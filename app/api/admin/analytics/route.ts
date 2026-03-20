@@ -11,23 +11,32 @@ export async function GET() {
   const weekStart   = new Date(now.getTime() - 7  * 86400000).toISOString()
   const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
-  // Fetch all paid orders + all products in parallel
-  const [{ data: allOrders }, { data: products }] = await Promise.all([
+  // Fetch all paid orders + all products + seller count + disputes in parallel
+  const [{ data: allOrders }, { data: products }, { count: sellerCount }, { data: disputes }] = await Promise.all([
     supabase.from('orders').select('*').eq('client_slug', 'dirtbikz').eq('payment_status', 'paid'),
     supabase.from('products').select('id, name, category, location').eq('client_slug', 'dirtbikz'),
+    supabase.from('sellers').select('id', { count: 'exact', head: true }).eq('client_slug', 'dirtbikz'),
+    supabase.from('seller_disputes').select('status, amount_cents').eq('client_slug', 'dirtbikz'),
   ])
 
   const orders = allOrders || []
   const productMap = Object.fromEntries((products || []).map(p => [p.id, p]))
 
-  function sumRevenue(list: typeof orders) {
-    return list.reduce((s, o) => s + (o.total_cents || 0), 0)
+  function sumField(list: typeof orders, field: string) {
+    return list.reduce((s, o) => s + ((o as Record<string, number>)[field] || 0), 0)
   }
 
-  const revenueAllTime = sumRevenue(orders)
-  const revenueMonth   = sumRevenue(orders.filter(o => o.created_at >= monthStart))
-  const revenueWeek    = sumRevenue(orders.filter(o => o.created_at >= weekStart))
-  const revenueToday   = sumRevenue(orders.filter(o => o.created_at >= todayStart))
+  const periodOrders = (since: string) => orders.filter(o => o.created_at >= since)
+
+  const revenueAllTime = sumField(orders, 'total_cents')
+  const revenueMonth   = sumField(periodOrders(monthStart), 'total_cents')
+  const revenueWeek    = sumField(periodOrders(weekStart), 'total_cents')
+  const revenueToday   = sumField(periodOrders(todayStart), 'total_cents')
+
+  // Platform commission (5% of gross)
+  const commissionAllTime = sumField(orders, 'platform_fee_cents')
+  const commissionMonth   = sumField(periodOrders(monthStart), 'platform_fee_cents')
+  const sellerPayoutAllTime = sumField(orders, 'seller_payout_cents')
 
   // Order counts by status (all orders, not just paid)
   const { data: allOrdersRaw } = await supabase
@@ -38,7 +47,7 @@ export async function GET() {
     statusCounts[o.payment_status] = (statusCounts[o.payment_status] || 0) + 1
   }
 
-  // Revenue by location — join items → product location
+  // Revenue by location
   const revenueByLocation: Record<string, number> = { NC: 0, SC: 0, GA: 0, Unknown: 0 }
   for (const order of orders) {
     const items: { product_id?: string; price_cents: number; quantity: number }[] = order.items || []
@@ -50,7 +59,7 @@ export async function GET() {
     }
   }
 
-  // Top products by order count
+  // Top products
   const productCounts: Record<string, { name: string; count: number; revenue: number }> = {}
   for (const order of orders) {
     const items: { product_id?: string; name: string; price_cents: number; quantity: number }[] = order.items || []
@@ -61,16 +70,26 @@ export async function GET() {
       productCounts[id].revenue += item.price_cents * item.quantity
     }
   }
-  const topProducts = Object.values(productCounts)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5)
+  const topProducts = Object.values(productCounts).sort((a, b) => b.count - a.count).slice(0, 5)
+
+  // Dispute summary
+  const allDisputes = disputes || []
+  const disputeSummary = {
+    total: allDisputes.length,
+    active: allDisputes.filter(d => d.status === 'needs_response' || d.status === 'under_review').length,
+    lostAmount: allDisputes.filter(d => d.status === 'lost').reduce((s, d) => s + d.amount_cents, 0),
+  }
 
   return Response.json({
     revenue: { allTime: revenueAllTime, month: revenueMonth, week: revenueWeek, today: revenueToday },
+    commission: { allTime: commissionAllTime, month: commissionMonth },
+    sellerPayouts: { allTime: sellerPayoutAllTime },
     orderCount: (allOrdersRaw || []).length,
     paidCount: orders.length,
+    sellerCount: sellerCount || 0,
     statusCounts,
     revenueByLocation,
     topProducts,
+    disputeSummary,
   })
 }

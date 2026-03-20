@@ -6,7 +6,12 @@ import '../globals.css'
 const NAV = [
   { href: '/admin/products',  label: 'Products',  icon: '📦' },
   { href: '/admin/orders',    label: 'Orders',    icon: '🧾' },
+  { href: '/admin/sellers',   label: 'Sellers',   icon: '👥' },
+  { href: '/admin/fraud',     label: 'Fraud',     icon: '🛡️' },
+  { href: '/admin/disputes',  label: 'Disputes',  icon: '⚠️' },
+  { href: '/admin/vin',       label: 'VIN Check', icon: '🔍' },
   { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
+  { href: '/admin/go-live',   label: 'Go Live',   icon: '🚀' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
