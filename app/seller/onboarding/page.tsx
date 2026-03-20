@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 const ANNUAL_FEE = '$10,299'
@@ -46,7 +46,15 @@ const css = {
 type Mode = 'register' | 'login'
 type Step = 'register' | 'payment' | 'connect'
 
-export default function SellerOnboarding() {
+export default function SellerOnboardingPage() {
+  return (
+    <Suspense fallback={<div style={css.page}><div style={{ ...css.card, textAlign: 'center' as const, color: 'rgba(255,255,255,0.3)' }}>Loading...</div></div>}>
+      <SellerOnboarding />
+    </Suspense>
+  )
+}
+
+function SellerOnboarding() {
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<Mode>('register')
   const [step, setStep] = useState<Step>('register')
